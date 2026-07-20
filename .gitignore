@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+
+# Unoptimized source images — the site uses the .webp versions in assets/images/
+assets/images/HeroBanner.JPG
+assets/images/Graduationophoto.JPEG
+assets/images/UMDDiningLogo.png
+assets/images/driftlogo.png
+assets/images/drift-screenshot.png
+assets/images/UMD_Dining_homepage.png
+assets/images/polysignal-homepage.png
+assets/images/polysignal-flowdiagram.png
+assets/images/simulation_synthetic_mse.png
