@@ -76,6 +76,7 @@
 
   <!-- ─── HERO ─── -->
   <section id="hero">
+    <div class="hero-bg" aria-hidden="true"></div>
     <div class="hero-text">
       <p class="hero-greeting">Hi, I'm</p>
       <h1>Alec Zhang</h1>
@@ -87,7 +88,7 @@
       <div class="hero-stats">
         <span><strong>3.93</strong> GPA</span>
         <span>Research @ Hswen &amp; MACHAMP Labs</span>
-        <span>Intern @ Epic Semi</span>
+        <span>Previously @ Epic Semi</span>
       </div>
     </div>
   </section>
@@ -869,6 +870,13 @@
       }, { passive: true });
     }
 
+    // Scroll-edge effect: nav gains its hairline + full material only once content scrolls under it
+    const setNavMaterial = () => {
+      navBar.classList.toggle('scrolled', window.scrollY > 8);
+    };
+    window.addEventListener('scroll', setNavMaterial, { passive: true });
+    setNavMaterial();
+
     // Reading progress bar
     const progressBar = document.querySelector('.scroll-progress');
     if (progressBar) {
@@ -922,9 +930,21 @@
       closeModal(modal);
     };
 
-    const openModal = modal => {
+    const openModal = (modal, trigger) => {
       if (document.activeElement instanceof HTMLElement) {
         document.activeElement.blur();
+      }
+      // Anchor the panel to its trigger: it grows out of (and closes back into) the clicked card
+      const panel = modal.querySelector('.project-modal-panel');
+      if (panel) {
+        if (trigger) {
+          const t = trigger.getBoundingClientRect();
+          const p = panel.getBoundingClientRect();
+          panel.style.transformOrigin =
+            `${t.left + t.width / 2 - p.left}px ${t.top + t.height / 2 - p.top}px`;
+        } else {
+          panel.style.transformOrigin = '';
+        }
       }
       modal.classList.add('open');
       modal.setAttribute('aria-hidden', 'false');
@@ -939,7 +959,7 @@
     const openFromTrigger = trigger => {
       const targetId = trigger.getAttribute('data-modal-target');
       const modal = document.getElementById(targetId);
-      if (modal) openModal(modal);
+      if (modal) openModal(modal, trigger);
     };
 
     modalTriggers.forEach(trigger => {
@@ -1017,11 +1037,32 @@
       });
     });
 
-    // Click-to-zoom lightbox for stage images
+    // Click-to-zoom lightbox: the image flies out of its thumbnail (FLIP) and back on close
     const lightbox = document.getElementById('stage-lightbox');
     const lightboxImg = lightbox?.querySelector('img');
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const springEase =
+      getComputedStyle(document.documentElement).getPropertyValue('--spring').trim() ||
+      'cubic-bezier(0.16, 1, 0.3, 1)';
+    let lightboxSource = null;
+
+    const flipTransform = (from, to) =>
+      `translate(${from.left - to.left}px, ${from.top - to.top}px) ` +
+      `scale(${from.width / to.width}, ${from.height / to.height})`;
 
     const closeLightbox = () => {
+      if (lightbox.classList.contains('open') && lightboxSource && !prefersReducedMotion) {
+        const from = lightboxSource.getBoundingClientRect();
+        const to = lightboxImg.getBoundingClientRect();
+        if (to.width && from.width) {
+          lightboxImg.style.transition = `transform 0.45s ${springEase}`;
+          lightboxImg.style.transform = flipTransform(from, to);
+          setTimeout(() => {
+            lightboxImg.style.transition = '';
+            lightboxImg.style.transform = '';
+          }, 460);
+        }
+      }
       lightbox.classList.remove('open');
       lightbox.setAttribute('aria-hidden', 'true');
     };
@@ -1033,12 +1074,117 @@
           if (!active) return;
           lightboxImg.src = active.src;
           lightboxImg.alt = active.alt;
-          lightbox.classList.add('open');
-          lightbox.setAttribute('aria-hidden', 'false');
+          lightboxSource = active;
+
+          const start = () => {
+            // Invert: start the enlarged image exactly over its thumbnail, then spring to center
+            if (!prefersReducedMotion) {
+              const from = active.getBoundingClientRect();
+              const to = lightboxImg.getBoundingClientRect(); // measurable while still hidden
+              if (to.width && from.width) {
+                lightboxImg.style.transition = 'none';
+                lightboxImg.style.transform = flipTransform(from, to);
+              }
+            }
+            lightbox.classList.add('open');
+            lightbox.setAttribute('aria-hidden', 'false');
+            requestAnimationFrame(() => {
+              lightboxImg.style.transition = `transform 0.55s ${springEase}`;
+              lightboxImg.style.transform = 'none';
+            });
+          };
+
+          if (lightboxImg.complete && lightboxImg.naturalWidth) start();
+          else lightboxImg.addEventListener('load', start, { once: true });
         });
       });
 
       lightbox.addEventListener('click', closeLightbox);
+    }
+
+    // ─── Fluid imagery: cursor-tilt tiles + scroll choreography ───
+    const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+    // Project tiles tilt 1:1 toward the cursor; screenshot parallaxes on its own layer;
+    // a light sheen follows the pointer. Springs flat on leave via the CSS transition.
+    if (finePointer && !prefersReducedMotion) {
+      document.querySelectorAll('.project-tile--peek').forEach(tile => {
+        const img = tile.querySelector('.project-tile-peek img');
+        const sheen = document.createElement('span');
+        sheen.className = 'tile-sheen';
+        sheen.setAttribute('aria-hidden', 'true');
+        tile.appendChild(sheen);
+
+        let nx = 0, ny = 0, pressed = false;
+
+        const apply = () => {
+          tile.style.transform =
+            `perspective(900px) rotateX(${(-ny * 6).toFixed(2)}deg) rotateY(${(nx * 7).toFixed(2)}deg)` +
+            ` translateY(-2px)${pressed ? ' scale(0.985)' : ''}`;
+          if (img) {
+            img.style.transition = 'none';
+            img.style.transform =
+              `translateX(calc(-50% + ${(nx * -10).toFixed(1)}px)) translateY(${(ny * -8).toFixed(1)}px)` +
+              ` rotate(-1deg) scale(1.02)`;
+          }
+          tile.style.setProperty('--mx', `${((nx + 0.5) * 100).toFixed(1)}%`);
+          tile.style.setProperty('--my', `${((ny + 0.5) * 100).toFixed(1)}%`);
+        };
+
+        tile.addEventListener('pointermove', event => {
+          const rect = tile.getBoundingClientRect();
+          nx = (event.clientX - rect.left) / rect.width - 0.5;
+          ny = (event.clientY - rect.top) / rect.height - 0.5;
+          tile.classList.add('tilting');
+          apply();
+        });
+        tile.addEventListener('pointerdown', () => { pressed = true; if (tile.classList.contains('tilting')) apply(); });
+        tile.addEventListener('pointerup', () => { pressed = false; if (tile.classList.contains('tilting')) apply(); });
+        tile.addEventListener('pointerleave', () => {
+          pressed = false;
+          tile.classList.remove('tilting');
+          tile.style.transform = '';
+          if (img) { img.style.transition = ''; img.style.transform = ''; }
+        });
+      });
+    }
+
+    // Scroll choreography: the hero banner drifts at ~35% of scroll speed (depth),
+    // the hero text counter-drifts and fades, and peek screenshots glide through
+    // their windows as the tiles cross the viewport. Scrubs both directions.
+    const heroBg = document.querySelector('.hero-bg');
+    const heroText = document.querySelector('.hero-text');
+    const peekWindows = Array.from(document.querySelectorAll('.project-tile-peek'));
+    let fluidTick = false;
+
+    const updateFluid = () => {
+      const vh = window.innerHeight;
+      const y = window.scrollY;
+      if (heroBg && y < vh * 1.2) {
+        heroBg.style.transform = `translateY(${(y * 0.35).toFixed(1)}px)`;
+        if (heroText) {
+          heroText.style.opacity = Math.max(0, 1 - y / (vh * 0.72)).toFixed(3);
+          heroText.style.transform = `translateY(${(y * -0.12).toFixed(1)}px)`;
+        }
+      }
+      peekWindows.forEach(peek => {
+        const rect = peek.getBoundingClientRect();
+        if (rect.bottom < -80 || rect.top > vh + 80) return;
+        const progress = (rect.top + rect.height / 2 - vh / 2) / vh; // ~ -0.5 … 0.5
+        peek.style.transform = `translateY(${(progress * 20).toFixed(1)}px)`;
+      });
+      fluidTick = false;
+    };
+
+    if (!prefersReducedMotion) {
+      window.addEventListener('scroll', () => {
+        if (!fluidTick) {
+          fluidTick = true;
+          requestAnimationFrame(updateFluid);
+        }
+      }, { passive: true });
+      window.addEventListener('resize', updateFluid);
+      updateFluid();
     }
 
     window.addEventListener('keydown', event => {

@@ -15,6 +15,10 @@
   --tag-border:   #c5d4b0;
   --gutter-desktop: 10%;
   --gutter-mobile: 8%;
+  /* Gentle spring easing (~critically damped, tiny settle) for press releases and modals */
+  --spring: linear(0, 0.008 1.1%, 0.031 2.2%, 0.129 4.7%, 0.257 6.9%,
+    0.671 13.3%, 0.789 15.5%, 0.881 17.8%, 0.957 20.7%, 0.998 23.7%,
+    1.015 27.4%, 1.017 31.4%, 1.001 38.4%, 1 50%, 1);
 }
 
 html {
@@ -101,10 +105,32 @@ nav {
   position: fixed; top: 0; left: 0; right: 0; z-index: 100;
   display: flex; justify-content: space-between; align-items: center;
   padding: 0 var(--gutter-desktop); height: 62px;
+  /* At rest the nav is bare glass (the hero's own top veil keeps links legible);
+     ::before carries the frosted material that fades in once content scrolls under. */
+  background: transparent;
+  border-bottom: 1px solid rgba(214, 208, 192, 0);
+  transition: border-color 0.35s ease, box-shadow 0.35s ease;
+}
+
+nav::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
   background: rgba(250, 248, 243, 0.92);
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
+  opacity: 0;
+  transition: opacity 0.35s ease;
 }
+
+nav.scrolled,
+nav.menu-open {
+  border-bottom-color: var(--border);
+  box-shadow: 0 10px 26px rgba(28, 28, 20, 0.05);
+}
+
+nav.scrolled::before,
+nav.menu-open::before { opacity: 1; }
 
 .nav-logo {
   display: inline-flex; align-items: center; gap: 10px;
@@ -138,7 +164,7 @@ nav {
   content: '';
   position: absolute; left: 0; right: 0; bottom: -6px; height: 2px;
   background: var(--accent); border-radius: 2px;
-  transform: scaleX(0); transform-origin: left;
+  transform: scaleX(0); transform-origin: right; /* unhover: exits right, mirroring the entry */
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .nav-links a:hover,
@@ -146,7 +172,7 @@ nav {
 .nav-links a.is-active { color: var(--accent); }
 .nav-links a:hover::after,
 .nav-links a:focus-visible::after,
-.nav-links a.is-active::after { transform: scaleX(1); }
+.nav-links a.is-active::after { transform: scaleX(1); transform-origin: left; }
 
 .nav-cv {
   display: inline-flex; align-items: center; gap: 5px;
@@ -264,18 +290,44 @@ h2 {
   padding-top: 96px;
   display: flex;
   align-items: center;
+  overflow: hidden;
+}
+
+/* Banner lives on its own layer so it can parallax (moves at ~35% of scroll speed).
+   Extra headroom above the section covers the shift; tune `top` / vertical position together. */
+#hero .hero-bg {
+  position: absolute;
+  left: 0; right: 0;
+  top: 0%; bottom: 0;
+  z-index: 0;
   background:
     linear-gradient(90deg, rgba(250, 248, 243, 0.94) 0%, rgba(250, 248, 243, 0.78) 30%, rgba(250, 248, 243, 0.42) 56%, rgba(250, 248, 243, 0.12) 76%, rgba(250, 248, 243, 0) 100%),
     radial-gradient(circle at 18% 28%, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0) 40%),
-    url('assets/images/hero-banner.webp') center 25% / cover no-repeat;
+    url('assets/images/hero-banner.webp') center 30% / cover no-repeat;
+  will-change: transform;
 }
 
 #hero::before {
   content: '';
   position: absolute;
   inset: 0;
+  z-index: 1;
   pointer-events: none;
-  background: linear-gradient(90deg, rgba(250, 248, 243, 0.18) 0%, rgba(250, 248, 243, 0.08) 42%, rgba(250, 248, 243, 0) 78%);
+  /* Top veil: keeps nav links legible over any crop. It belongs to the hero,
+     so it scrolls away with the page — no toggling, always smooth.
+     Eased stops (no straight-line fade) so the falloff never reads as a band. */
+  background:
+    linear-gradient(180deg,
+      rgba(250, 248, 243, 0.92) 0px,
+      rgba(250, 248, 243, 0.88) 40px,
+      rgba(250, 248, 243, 0.79) 80px,
+      rgba(250, 248, 243, 0.66) 120px,
+      rgba(250, 248, 243, 0.50) 160px,
+      rgba(250, 248, 243, 0.34) 200px,
+      rgba(250, 248, 243, 0.19) 240px,
+      rgba(250, 248, 243, 0.08) 280px,
+      rgba(250, 248, 243, 0) 330px),
+    linear-gradient(90deg, rgba(250, 248, 243, 0.18) 0%, rgba(250, 248, 243, 0.08) 42%, rgba(250, 248, 243, 0) 78%);
 }
 
 #hero > * {
@@ -379,7 +431,16 @@ h2 {
   display: inline-flex; align-items: center; justify-content: center;
   padding: 13px 30px; border-radius: 50px;
   font-size: 14px; font-weight: 600; text-decoration: none;
-  letter-spacing: 0.02em; transition: all 0.2s;
+  letter-spacing: 0.02em;
+  transition: background 0.2s, border-color 0.2s, color 0.2s,
+              box-shadow 0.25s, transform 0.45s var(--spring);
+}
+
+/* Respond on pointer-down: instant compress, spring release */
+.hero-btn:active {
+  transform: translateY(0) scale(0.96);
+  transition-duration: 0.08s;
+  transition-timing-function: ease-out;
 }
 
 .hero-btn-primary {
@@ -490,6 +551,7 @@ h2 {
 .about-social a {
   color: var(--muted); text-decoration: none;
   display: flex; align-items: center;
+  padding: 10px; margin: -10px; /* ~42px touch target, same visual size */
   transition: color 0.2s;
 }
 .about-social a:hover,
@@ -664,13 +726,14 @@ h2 {
   height: 1.5px;
   background: var(--accent);
   transform: scaleX(0);
-  transform-origin: left;
+  transform-origin: right;
   transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .exp-item:hover .exp-marker-company::after,
 .exp-item:focus-within .exp-marker-company::after {
   transform: scaleX(1);
+  transform-origin: left;
 }
 
 .exp-marker-range {
@@ -717,6 +780,7 @@ h2 {
   font-weight: 500;
   color: var(--text);
   line-height: 1.12;
+  letter-spacing: -0.015em;
   margin-bottom: 6px;
   transition: color 0.2s;
 }
@@ -816,11 +880,13 @@ h2 {
   font-size: clamp(25px, 2.25vw, 31px);
   font-weight: 800;
   line-height: 1.16;
+  letter-spacing: -0.015em;
 }
 
 .research-card--featured h3 {
   font-size: clamp(42px, 5vw, 66px);
   line-height: 1;
+  letter-spacing: -0.02em;
   max-width: 9ch;
 }
 
@@ -893,6 +959,7 @@ h2 {
   font-size: clamp(20px, 1.8vw, 26px);
   font-weight: 800;
   line-height: 1.12;
+  letter-spacing: -0.01em;
   margin: 0;
 }
 
@@ -931,20 +998,24 @@ body.modal-open {
   display: flex;
   padding: 56px 6%;
   background: rgba(25, 24, 20, 0.55);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  /* Materialize: the scrim's blur animates in rather than popping */
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
   align-items: center;
   justify-content: center;
   opacity: 0;
   pointer-events: none;
   visibility: hidden;
-  transition: opacity 0.42s ease, visibility 0s linear 0.42s, background 0.42s ease;
+  transition: opacity 0.42s ease, visibility 0s linear 0.42s, background 0.42s ease,
+              backdrop-filter 0.42s ease, -webkit-backdrop-filter 0.42s ease;
 }
 
 .project-modal.open {
   opacity: 1;
   pointer-events: auto;
   visibility: visible;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   transition-delay: 0s;
 }
 
@@ -1030,6 +1101,7 @@ footer p { color: var(--muted); font-size: 12px; }
 .footer-icons a {
   color: var(--muted); text-decoration: none;
   display: flex; align-items: center;
+  padding: 10px; margin: -10px; /* ~42px touch target, same visual size */
   transition: color 0.2s, transform 0.2s;
 }
 .footer-icons a:hover,
@@ -1040,13 +1112,13 @@ footer p { color: var(--muted); font-size: 12px; }
 .fade-up {
   opacity: 0;
   transform: translateY(40px);
-  filter: blur(9px);
+  filter: blur(4px); /* kept subtle: filter is the one non-compositor property in the reveal */
   transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
               transform 0.8s cubic-bezier(0.16, 1, 0.3, 1),
               filter 0.8s cubic-bezier(0.16, 1, 0.3, 1);
   will-change: opacity, transform, filter;
 }
-.fade-up.visible { opacity: 1; transform: translateY(0); filter: blur(0); }
+.fade-up.visible { opacity: 1; transform: translateY(0); filter: blur(0); will-change: auto; }
 
 .edu-timeline .fade-up {
   transform: translateY(34px);
@@ -1394,6 +1466,7 @@ footer p { color: var(--muted); font-size: 12px; }
   font-family: 'Playfair Display', Georgia, serif;
   font-size: clamp(26px, 3.2vw, 36px);
   line-height: 1.1;
+  letter-spacing: -0.015em;
   color: var(--text);
   margin-bottom: 12px;
 }
@@ -1548,8 +1621,9 @@ footer p { color: var(--muted); font-size: 12px; }
     linear-gradient(180deg, var(--panel-top) 0%, var(--panel-bottom) 100%);
   box-shadow: 0 40px 110px rgba(16, 15, 12, 0.45);
   opacity: 0;
-  transform: translateY(18px) scale(0.965);
-  transition: opacity 0.45s ease, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translateY(12px) scale(0.94);
+  /* transform-origin is set from the clicked card in JS, so the panel grows out of its trigger */
+  transition: opacity 0.45s ease, transform 0.55s var(--spring);
 }
 
 .project-modal.open .stage-panel {
@@ -1827,12 +1901,8 @@ footer p { color: var(--muted); font-size: 12px; }
   object-fit: contain;
   border-radius: 10px;
   box-shadow: 0 40px 120px rgba(0, 0, 0, 0.6);
-  transform: scale(0.96);
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.stage-lightbox.open img {
-  transform: scale(1);
+  /* Enter/exit transforms are FLIP-animated from the source thumbnail in JS */
+  transform-origin: top left;
 }
 
 @media (max-width: 960px) {
@@ -1944,4 +2014,102 @@ footer p { color: var(--muted); font-size: 12px; }
 
 .reveal-words.visible .word > span {
   transform: translateY(0);
+}
+
+
+/* ─── PRESS FEEDBACK: respond on pointer-down, spring release ─── */
+/* Small controls: instant compress while pressed… */
+.nav-cv:active,
+.drawer-link:active,
+.stage-nav:active,
+.stage-thumb:active,
+.project-modal-close:active,
+.nav-toggle:active {
+  transform: scale(0.94);
+  transition: transform 0.08s ease-out;
+}
+
+/* …and a spring on the way back up */
+.nav-cv { transition: background 0.18s, color 0.18s, border-color 0.18s, transform 0.35s var(--spring); }
+.drawer-link { transition: background 0.18s, color 0.18s, transform 0.35s var(--spring); }
+.project-modal-close,
+.nav-toggle { transition: color 0.2s, border-color 0.2s, background 0.2s, transform 0.35s var(--spring); }
+.stage-thumb { transition: opacity 0.2s, border-color 0.2s, transform 0.35s var(--spring); }
+.stage-nav { transition: color 0.2s, border-color 0.2s, transform 0.35s var(--spring); }
+
+/* Clickable cards: compress under the pointer, spring back on release.
+   The .visible variants take over transform timing from .fade-up once revealed. */
+.research-card.visible,
+.project-tile.visible {
+  transition: border-color 0.2s, box-shadow 0.25s, opacity 0.3s ease, transform 0.5s var(--spring);
+}
+.research-card:active,
+.project-tile:active {
+  transform: translateY(-1px) scale(0.985);
+  transition: transform 0.08s ease-out;
+}
+
+.exp-item.visible { transition: opacity 0.3s ease, transform 0.5s var(--spring); }
+.exp-item:active {
+  transform: scale(0.995);
+  transition: transform 0.08s ease-out;
+}
+
+
+/* ─── REDUCED TRANSPARENCY: frosted surfaces go solid ─── */
+@media (prefers-reduced-transparency: reduce) {
+  nav, nav.scrolled, nav.menu-open, .nav-links, section.shaded, section.divider,
+  footer, .edu-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  nav, nav.scrolled, nav.menu-open {
+    background: var(--bg);
+    border-bottom-color: var(--border);
+    box-shadow: none;
+  }
+  nav::before { content: none; }
+  .nav-links { background: var(--bg); }
+  .project-modal {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(25, 24, 20, 0.8);
+  }
+  .stage-lightbox {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(12, 11, 9, 0.95);
+  }
+  .project-modal-close { background: #fffdf8; }
+}
+
+
+/* ─── FLUID IMAGERY: cursor tilt, sheen, scroll choreography ─── */
+/* Light sheen that follows the cursor across a tilting tile (span injected by JS) */
+.tile-sheen {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(520px circle at var(--mx, 50%) var(--my, 40%),
+    rgba(255, 255, 255, 0.22), transparent 46%);
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+.project-tile--peek:hover .tile-sheen { opacity: 1; }
+
+/* While the pointer steers the card, transform tracks 1:1 — no easing lag.
+   On pointerleave the class is removed and the spring transition takes it home. */
+.project-tile--peek.tilting {
+  transition: border-color 0.2s, box-shadow 0.25s, opacity 0.3s ease;
+}
+
+/* Peek windows are translated every scroll frame */
+.project-tile-peek { will-change: transform; }
+
+/* Multi-line headings wrap to balanced lines instead of leaving orphan words */
+h2, .research-card h3, .project-tile-headline h3, .drawer-header h3, .exp-title {
+  text-wrap: balance;
 }
